@@ -1,0 +1,51 @@
+Workshop - Licence
+==================
+
+Copyright (c) 2026 zuynes. All rights reserved.
+
+WHAT YOU MAY DO
+---------------
+You may download Workshop, run it on your own computers, and use it to
+modify your own, legally owned copy of Assassin's Creed IV Black Flag
+Resynced, for as long as you like and at no cost. You may share the mods
+and images you make with it. You may read the source code included in the
+package to see what the tool does to your files.
+
+WHAT YOU MAY NOT DO WITHOUT WRITTEN PERMISSION
+----------------------------------------------
+  * redistribute Workshop, in whole or in part, anywhere other than the
+    author's own release pages;
+  * repackage, rehost, mirror or bundle it with other software;
+  * sell it, put it behind a paywall, or run advertising on a download of
+    it;
+  * publish a modified or derived version of it;
+  * reuse its source code in another project.
+
+Permission for any of the above is usually given if you ask - contact the
+author on the mod page or on Discord.
+
+NO WARRANTY
+-----------
+Workshop is provided "as is", without warranty of any kind, express or
+implied. It writes to your game files; it keeps byte-exact backups and can
+revert its own changes, but you use it at your own risk, and the author is
+not liable for any damage, lost data or broken installation arising from
+its use.
+
+WHAT THIS LICENCE DOES NOT COVER
+--------------------------------
+  * the bundled third-party components listed in THIRD-PARTY-NOTICES.txt,
+    which keep their own licences and their own permissions (CPython, .NET,
+    NumPy, Pillow, pywebview, vgmstream and its FFmpeg libraries, Lucide,
+    DirectXTex, and others). Several of those licences let you copy and
+    redistribute those parts independently of this one;
+  * tools\oo2core_7_win64.dll (Oodle Data Compression, RAD Game Tools /
+    Epic Games) - commercial middleware, redistribution restricted, no
+    rights are granted here;
+  * any Assassin's Creed IV Black Flag content: game names, identifiers,
+    textures, models, audio, and every image shipped in this package, all
+    of which belong to Ubisoft Entertainment.
+
+Assassin's Creed IV Black Flag is a trademark of Ubisoft Entertainment. This
+tool is an unofficial fan-made utility, not affiliated with or endorsed by
+Ubisoft.

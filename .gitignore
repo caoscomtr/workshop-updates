@@ -1,0 +1,7 @@
+# Update packages are published as Release assets, never committed here.
+*.zip
+
+# Windows / editor litter
+Thumbs.db
+desktop.ini
+.DS_Store
