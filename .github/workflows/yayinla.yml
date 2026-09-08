@@ -1,0 +1,142 @@
+# Publish a Workshop release from a pushed tag.
+#
+# Why this exists: the release asset used to be uploaded by hand. This workflow
+# does it from a tag push instead, using the token GitHub gives the job itself --
+# no personal access token is stored, passed around, or typed anywhere.
+#
+# How to publish:
+#   1. commit payload/Workshop_vX.Y_update.zip on the commit you will tag
+#   2. surum.json already points at the release address
+#   3. git tag vX.Y && git push origin vX.Y
+#
+# The job REFUSES to publish unless the asset's SHA-256 and size match what
+# surum.json promises. A release whose bytes disagree with the feed would make
+# every client reject the update; better to fail here, loudly, than to ship a
+# pair that can never install.
+name: Publish release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the package against surum.json
+        id: check
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          ZIP="payload/Workshop_${TAG}_update.zip"
+          echo "tag: $TAG"
+          if [ ! -f "$ZIP" ]; then
+            echo "::error::asset not found: $ZIP"
+            exit 1
+          fi
+          HAVE="$(sha256sum "$ZIP" | cut -d' ' -f1)"
+          WANT="$(python3 -c 'import json;print(json.load(open("surum.json"))["sha256"])')"
+          FEED="$(python3 -c 'import json;print(json.load(open("surum.json"))["surum"])')"
+          SIZE_WANT="$(python3 -c 'import json;print(json.load(open("surum.json"))["boyut"])')"
+          SIZE_HAVE="$(stat -c%s "$ZIP")"
+          echo "asset sha : $HAVE"
+          echo "feed  sha : $WANT"
+          if [ "$HAVE" != "$WANT" ]; then
+            echo "::error::sha256 mismatch - the feed promises bytes this asset does not have."
+            exit 1
+          fi
+          if [ "$SIZE_HAVE" != "$SIZE_WANT" ]; then
+            echo "::error::size mismatch: asset $SIZE_HAVE, feed $SIZE_WANT"
+            exit 1
+          fi
+          if [ "$FEED" != "$TAG" ]; then
+            echo "::error::surum.json says $FEED but the tag is $TAG"
+            exit 1
+          fi
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="SURUM_NOTU_${TAG}.md"
+          if [ -f "$NOTES" ]; then
+            gh release create "$TAG" "${{ steps.check.outputs.zip }}" \
+              --title "Workshop $TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" "${{ steps.check.outputs.zip }}" \
+              --title "Workshop $TAG" --generate-notes
+          fi
+
+      # Nexus Mods has an official Upload API (open beta) and action, so this leg
+      # can be automated too -- but only the repository owner can supply the key.
+      # Add it once, in GitHub's own UI, and this step starts working by itself:
+      #   Settings > Secrets and variables > Actions
+      #     secret   NEXUSMODS_API_KEY  = your key from nexusmods.com/users/myaccount?tab=api
+      #     variable NEXUS_FILE_ID      = the file id from the mod's Manage Files page ("API Info")
+      # Until both exist the step is skipped and says so; it never fails the release.
+      # NOTE: this uploads the UPDATE package. The full package (~126 MB) cannot travel
+      # through the repository at all -- git refuses files over 100 MB -- so it still
+      # goes up by hand until we split it or push it straight from the build machine.
+      - name: Upload to Nexus Mods (skipped unless the key is configured)
+        id: nexus_gate
+        # The secret is passed through `env`, never interpolated into the script
+        # text: `${{ }}` pastes the raw value into the shell, so a key containing
+        # a quote or a backtick would break the line -- or run as a command.
+        env:
+          ANAHTAR: ${{ secrets.NEXUSMODS_API_KEY }}
+          DOSYA_ID: ${{ vars.NEXUS_FILE_ID }}
+        run: |
+          if [ -n "${ANAHTAR:-}" ] && [ -n "${DOSYA_ID:-}" ]; then
+            echo "hazir=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "hazir=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::Nexus upload skipped - NEXUSMODS_API_KEY secret and/or NEXUS_FILE_ID variable not set."
+          fi
+
+      - name: Upload to Nexus Mods
+        if: steps.nexus_gate.outputs.hazir == 'yes'
+        # Pinned to a real tag: the action has NO `v1` tag yet (checked 2026-09-08,
+        # newest is v1.0.0-beta.10), so `@v1` would fail to resolve at run time.
+        uses: Nexus-Mods/upload-action@v1.0.0-beta.10
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          file_id: ${{ vars.NEXUS_FILE_ID }}
+          filename: ${{ steps.check.outputs.zip }}
+          version: ${{ github.ref_name }}
+          display_name: Workshop ${{ github.ref_name }} (update package)
+          category: update
+          update_mod_version: true
+
+      - name: Confirm the asset is downloadable
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/Workshop_${TAG}_update.zip"
+          echo "checking $URL"
+          CODE=000
+          for i in 1 2 3 4 5; do
+            CODE="$(curl -sL -o /tmp/a.zip -w '%{http_code}' "$URL" || true)"
+            if [ "$CODE" = "200" ]; then break; fi
+            echo "attempt $i: HTTP $CODE, retrying"
+            sleep 5
+          done
+          if [ "$CODE" != "200" ]; then
+            echo "::error::asset not downloadable (HTTP $CODE)"
+            exit 1
+          fi
+          HAVE="$(sha256sum /tmp/a.zip | cut -d' ' -f1)"
+          WANT="$(python3 -c 'import json;print(json.load(open("surum.json"))["sha256"])')"
+          if [ "$HAVE" != "$WANT" ]; then
+            echo "::error::downloaded bytes differ from the feed"
+            exit 1
+          fi
+          echo "published and verified: $URL"
